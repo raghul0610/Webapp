@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
+import VoiceSearch from './VoiceSearch';
 import './Suppliers.css';
 
 const Suppliers = () => {
@@ -12,12 +14,30 @@ const Suppliers = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState([]);
+  const [reviews, setReviews] = useState({});
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewingSupplierId, setReviewingSupplierId] = useState(null);
+  const [reviewText, setReviewText] = useState('');
+  const { t } = useLanguage();
 
   // Check login status on component mount
   useEffect(() => {
     const loginStatus = localStorage.getItem('isLoggedIn');
     if (loginStatus === 'true') {
       setIsLoggedIn(true);
+    }
+    
+    // Load favorites from localStorage
+    const savedFavorites = localStorage.getItem('favorites');
+    if (savedFavorites) {
+      setFavorites(JSON.parse(savedFavorites));
+    }
+    
+    // Load reviews from localStorage
+    const savedReviews = localStorage.getItem('reviews');
+    if (savedReviews) {
+      setReviews(JSON.parse(savedReviews));
     }
   }, []);
 
@@ -85,7 +105,7 @@ const Suppliers = () => {
       setShowLoginModal(false);
       setPhoneNumber('');
     } else {
-      alert('Please enter a valid 10-digit phone number');
+      alert(t('validPhoneError'));
     }
   };
 
@@ -94,6 +114,58 @@ const Suppliers = () => {
     setIsLoggedIn(false);
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userPhone');
+  };
+
+  // Handle favorites
+  const toggleFavorite = (supplierId) => {
+    const newFavorites = favorites.includes(supplierId)
+      ? favorites.filter(id => id !== supplierId)
+      : [...favorites, supplierId];
+    
+    setFavorites(newFavorites);
+    localStorage.setItem('favorites', JSON.stringify(newFavorites));
+  };
+
+  // Handle reviews
+  const openReviewModal = (supplierId) => {
+    setReviewingSupplierId(supplierId);
+    setShowReviewModal(true);
+    setReviewText('');
+  };
+
+  const submitReview = (e) => {
+    e.preventDefault();
+    if (!reviewText.trim()) {
+      alert(t('reviewError'));
+      return;
+    }
+
+    const userPhone = localStorage.getItem('userPhone') || 'Anonymous';
+    const newReview = {
+      id: Date.now(),
+      text: reviewText,
+      author: userPhone,
+      date: new Date().toLocaleDateString()
+    };
+
+    const updatedReviews = {
+      ...reviews,
+      [reviewingSupplierId]: [
+        ...(reviews[reviewingSupplierId] || []),
+        newReview
+      ]
+    };
+
+    setReviews(updatedReviews);
+    localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+    setShowReviewModal(false);
+    setReviewText('');
+    alert(t('reviewSubmitted'));
+  };
+
+  // Handle voice search
+  const handleVoiceResult = (transcript) => {
+    setSearchTerm(transcript);
   };
 
   // Render star rating
@@ -124,32 +196,39 @@ const Suppliers = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading suppliers...</div>;
+    return <div className="loading">{t('loading')}</div>;
   }
 
   return (
     <div className="suppliers-container">
       <div className="suppliers-header">
-        <h1>Suppliers Directory</h1>
-        <p>Find the best suppliers for your business needs</p>
+        <h1>{t('suppliersDirectory')}</h1>
+        <p>{t('findBestSuppliers')}</p>
         
         {isLoggedIn && (
           <div className="user-info">
-            <span>Welcome! </span>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
+            <span>{t('welcome')} </span>
+            <button onClick={handleLogout} className="logout-btn">{t('logout')}</button>
           </div>
         )}
       </div>
 
       {/* Search and Filter Controls */}
       <div className="controls">
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="Search by name or product..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
+        <div className="search-section">
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder={t('searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
+          <VoiceSearch 
+            onVoiceResult={handleVoiceResult}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
           />
         </div>
 
@@ -159,7 +238,7 @@ const Suppliers = () => {
             onChange={(e) => setCityFilter(e.target.value)}
             className="filter-select"
           >
-            <option value="">All Cities</option>
+            <option value="">{t('allCities')}</option>
             {uniqueCities.map(city => (
               <option key={city} value={city}>{city}</option>
             ))}
@@ -170,9 +249,9 @@ const Suppliers = () => {
             onChange={(e) => setDeliveryFilter(e.target.value)}
             className="filter-select"
           >
-            <option value="">All Delivery Options</option>
-            <option value="available">Delivery Available</option>
-            <option value="notAvailable">No Delivery</option>
+            <option value="">{t('allDeliveryOptions')}</option>
+            <option value="available">{t('deliveryAvailable')}</option>
+            <option value="notAvailable">{t('noDelivery')}</option>
           </select>
 
           <select
@@ -180,7 +259,7 @@ const Suppliers = () => {
             onChange={(e) => setSortBy(e.target.value)}
             className="filter-select"
           >
-            <option value="rating">Sort by Rating</option>
+            <option value="rating">{t('sortByRating')}</option>
           </select>
         </div>
       </div>
@@ -189,7 +268,7 @@ const Suppliers = () => {
       <div className="suppliers-grid">
         {filteredSuppliers.length === 0 ? (
           <div className="no-results">
-            <p>No suppliers found matching your criteria.</p>
+            <p>{t('noResults')}</p>
           </div>
         ) : (
           filteredSuppliers.map(supplier => (
@@ -197,8 +276,15 @@ const Suppliers = () => {
               <div className="supplier-image">
                 <img src={supplier.image} alt={supplier.name} />
                 {supplier.deliveryAvailable && (
-                  <div className="delivery-badge">Delivery Available</div>
+                  <div className="delivery-badge">{t('deliveryBadge')}</div>
                 )}
+                <button
+                  className={`favorite-btn ${favorites.includes(supplier.id) ? 'favorited' : ''}`}
+                  onClick={() => toggleFavorite(supplier.id)}
+                  title={favorites.includes(supplier.id) ? t('removeFromFavorites') : t('addToFavorites')}
+                >
+                  {favorites.includes(supplier.id) ? '❤️' : '🤍'}
+                </button>
               </div>
 
               <div className="supplier-info">
@@ -211,7 +297,7 @@ const Suppliers = () => {
                 </div>
 
                 <div className="supplier-products">
-                  <h4>Products:</h4>
+                  <h4>{t('products')}:</h4>
                   <div className="products-list">
                     {supplier.products.map((product, index) => (
                       <span key={index} className="product-tag">
@@ -222,7 +308,38 @@ const Suppliers = () => {
                 </div>
 
                 <div className="supplier-pricing">
-                  <strong>Pricing: {supplier.pricing}</strong>
+                  <strong>{t('pricing')}: {supplier.pricing}</strong>
+                </div>
+
+                {/* Reviews Section */}
+                <div className="reviews-section">
+                  <div className="reviews-header">
+                    <h4>{t('reviews')} ({(reviews[supplier.id] || []).length})</h4>
+                    {isLoggedIn && (
+                      <button
+                        onClick={() => openReviewModal(supplier.id)}
+                        className="write-review-btn"
+                      >
+                        {t('writeReview')}
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="reviews-list">
+                    {reviews[supplier.id] && reviews[supplier.id].length > 0 ? (
+                      reviews[supplier.id].slice(-2).map((review) => (
+                        <div key={review.id} className="review-item">
+                          <p className="review-text">"{review.text}"</p>
+                          <div className="review-meta">
+                            <span className="review-author">- {review.author}</span>
+                            <span className="review-date">{review.date}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="no-reviews">{t('noReviews')}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="supplier-actions">
@@ -231,14 +348,14 @@ const Suppliers = () => {
                       onClick={() => handleWhatsAppContact(supplier.whatsapp)}
                       className="whatsapp-btn"
                     >
-                      💬 Contact on WhatsApp
+                      💬 {t('contactWhatsApp')}
                     </button>
                   ) : (
                     <button
                       onClick={() => setShowLoginModal(true)}
                       className="login-prompt-btn"
                     >
-                      🔒 Login to Contact
+                      🔒 {t('loginToContact')}
                     </button>
                   )}
                 </div>
@@ -253,7 +370,7 @@ const Suppliers = () => {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2>Login to Contact Suppliers</h2>
+              <h2>{t('loginTitle')}</h2>
               <button
                 onClick={() => setShowLoginModal(false)}
                 className="close-btn"
@@ -264,13 +381,13 @@ const Suppliers = () => {
             
             <form onSubmit={handleLogin} className="login-form">
               <div className="form-group">
-                <label htmlFor="phone">Phone Number:</label>
+                <label htmlFor="phone">{t('phoneNumber')}:</label>
                 <input
                   type="tel"
                   id="phone"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Enter 10-digit phone number"
+                  placeholder={t('phoneNumberPlaceholder')}
                   maxLength="10"
                   pattern="[0-9]{10}"
                   required
@@ -279,7 +396,41 @@ const Suppliers = () => {
               </div>
               
               <button type="submit" className="login-submit-btn">
-                Login
+                {t('login')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>{t('writeReview')}</h2>
+              <button
+                onClick={() => setShowReviewModal(false)}
+                className="close-btn"
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={submitReview} className="review-form">
+              <div className="form-group">
+                <textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  placeholder={t('reviewPlaceholder')}
+                  className="review-textarea"
+                  rows="4"
+                  required
+                />
+              </div>
+              
+              <button type="submit" className="review-submit-btn">
+                {t('submitReview')}
               </button>
             </form>
           </div>
